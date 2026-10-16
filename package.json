@@ -1,0 +1,45 @@
+{
+  "name": "@sandsoftwaresolutions/object-kit",
+  "version": "0.1.0",
+  "description": "Object and list helpers by path, merge, group, sort and flatten. Safe against prototype pollution.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run"
+  },
+  "keywords": [
+    "object",
+    "path",
+    "merge",
+    "groupby",
+    "sortby",
+    "pollution"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SandSoftwareSolutions/ss-object-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SandSoftwareSolutions/ss-object-kit/issues"
+  },
+  "homepage": "https://github.com/SandSoftwareSolutions/ss-object-kit#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}

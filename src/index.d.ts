@@ -1,0 +1,22 @@
+export type Path = string | readonly (string | number)[];
+
+export function isPlainObject(value: unknown): value is Record<string, unknown>;
+export function toPath(path: Path): string[];
+export function get<T = unknown>(object: unknown, path: Path, fallback?: T): T | undefined;
+export function has(object: unknown, path: Path): boolean;
+export function set<T extends object>(object: T, path: Path, value: unknown): T;
+export function unset(object: unknown, path: Path): boolean;
+export function setIn<T>(object: T, path: Path, value: unknown): T;
+export function unsetIn<T>(object: T, path: Path): T;
+export function pick<T extends object, K extends keyof T>(object: T, keys: readonly K[]): Pick<T, K>;
+export function omit<T extends object, K extends keyof T>(object: T, keys: readonly K[]): Omit<T, K>;
+export function merge(...sources: unknown[]): any;
+export function withOptions(options: { arrays: "replace" | "concat" | "unique" }): object;
+export function deepFreeze<T>(value: T): T;
+export function mapValues<T, R>(object: Record<string, T>, fn: (value: T, key: string) => R): Record<string, R>;
+export function groupBy<T>(items: Iterable<T>, key: string | ((item: T) => unknown)): Record<string, T[]>;
+export function indexBy<T>(items: Iterable<T>, key: string | ((item: T) => unknown)): Record<string, T>;
+export function uniqueBy<T>(items: Iterable<T>, key: string | ((item: T) => unknown)): T[];
+export function sortBy<T>(items: Iterable<T>, ...keys: (string | ((item: T) => unknown))[]): T[];
+export function flatten(object: Record<string, unknown>): Record<string, unknown>;
+export function unflatten(flat: Record<string, unknown>): Record<string, unknown>;
