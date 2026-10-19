@@ -38,7 +38,10 @@ unflatten({ "a.b": 1 });                  // { a: { b: 1 } }
 
 - **No prototype pollution.** `set`, `setIn`, `merge`, `pick`, `unflatten` refuse or ignore `__proto__`, `constructor` and `prototype`, so a JSON body like `{"__proto__": {"admin": true}}` cannot change every object in your program.
 - **Own properties only.** `get(obj, "toString")` or `"a.constructor"` returns your fallback, not a function from `Object.prototype`.
-- **Paths are strict.** `"a..b"`, `"a."` and `".a"` throw instead of guessing. Quote keys that contain dots: `a['x.y']`.
+- **Paths are strict.** `"a..b"`, `"a."`, `".a"` and `"a[0]b"` throw instead of guessing. Quote keys that contain dots: `a['x.y']`.
 - `merge` only merges plain objects (not Dates, Maps or class instances: the later value replaces them), skips `undefined` and lets `null` replace.
-- `sortBy` is stable, compares strings with natural number order and ignores case, and puts missing values last (also when descending).
+- `sortBy` is stable, compares strings with natural number order and ignores case, and puts missing values (`undefined`, `null`, `NaN`) last (also when descending).
+- `merge(..., withOptions({ arrays: "unique" }))` treats objects with the same content as equal whatever their key order, and runs in linear time.
+- `flatten` joins keys with a dot, so `{ "a.b": 1 }` and `{ a: { b: 1 } }` flatten to the same key (the later one wins) and `unflatten` cannot tell them apart; do not use it for objects whose keys contain dots.
+- `deepFreeze` does not call getters, skips Buffers and typed arrays (JavaScript cannot freeze those) and does not freeze what a Map or Set holds.
 - `isPlainObject`, `has`, `toPath`, `mapValues` and `deepFreeze` are included.

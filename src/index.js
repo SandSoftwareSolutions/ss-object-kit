@@ -22,7 +22,7 @@ export function toPath(path) {
     const between = path.slice(consumed, m.index);
     if (between === ".") {
       if (keys.length === 0 || m[1] === undefined) throw bad(); // a dot must sit between two names
-    } else if (between !== "") throw bad();
+    } else if (between !== "" || (m[1] !== undefined && keys.length > 0)) throw bad(); // a name after a ] needs a dot: "a[0]b" is not a path
     consumed = m.index + m[0].length;
     keys.push(m[1] ?? m[2] ?? (m[3] ?? m[4]).replace(/\\(.)/g, "$1"));
   }
@@ -155,7 +155,12 @@ export function merge(...sources) {
     }
     if (Array.isArray(a) && Array.isArray(b) && mode !== "replace") {
       const all = [...a, ...b].map(clone);
-      return mode === "unique" ? all.filter((x, i) => all.findIndex((y) => same(x, y)) === i) : all;
+      if (mode !== "unique") return all;
+      const seen = new Set();
+      return all.filter((x) => {
+        const id = canonical(x);
+        return seen.has(id) ? false : (seen.add(id), true);
+      });
     }
     return clone(b);
   };
@@ -166,13 +171,24 @@ export function merge(...sources) {
 export const withOptions = (options) => ({ __mergeOptions: options });
 
 const clone = (v) => (isPlainObject(v) ? Object.fromEntries(Object.entries(v).filter(([k]) => !BLOCKED.has(k)).map(([k, x]) => [k, clone(x)])) : Array.isArray(v) ? v.map(clone) : v);
-const same = (a, b) => a === b || (typeof a === "object" && a !== null && typeof b === "object" && b !== null && JSON.stringify(a) === JSON.stringify(b));
+// A string that is the same for equal values, whatever the order of object keys (so unique is linear instead of comparing every pair).
+function canonical(v) {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (isPlainObject(v)) return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`;
+  if (v instanceof Date) return `date:${v.getTime()}`;
+  if (v !== null && typeof v === "object") return `object:${JSON.stringify(v)}`; // class instances, Maps...: as before, by their JSON
+  return `${typeof v}:${Object.is(v, -0) ? "0" : String(v)}`;
+}
 
-/** Freezes an object and everything inside it, so accidental changes throw in strict mode. */
+/** Freezes an object and everything inside it, so accidental changes throw in strict mode. Getters are not called; typed arrays and Buffers (which JavaScript cannot freeze) and the contents of a Map or Set stay changeable. */
 export function deepFreeze(value) {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    if (ArrayBuffer.isView(value) && value.byteLength > 0) return value; // typed arrays and Buffers with content cannot be frozen
     Object.freeze(value);
-    for (const key of Reflect.ownKeys(value)) deepFreeze(value[key]);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if ("value" in descriptor) deepFreeze(descriptor.value); // never call a getter
+    }
   }
   return value;
 }
@@ -208,13 +224,14 @@ export function uniqueBy(items, key) {
   });
 }
 
-/** A stable sort by one or more keys; prefix a key with `-` for descending: `sortBy(rows, "city", "-age")`. Functions work too. Numbers, strings (with locale rules) and dates compare naturally; `undefined` goes last. */
+/** A stable sort by one or more keys; prefix a key with `-` for descending: `sortBy(rows, "city", "-age")`. Functions work too. Numbers, strings (with locale rules) and dates compare naturally; `undefined`, `null` and `NaN` go last. */
 export function sortBy(items, ...keys) {
+  const isMissing = (v) => v === undefined || v === null || (typeof v === "number" && Number.isNaN(v)); // NaN has no place in an order, so it goes last like a missing value
   const specs = keys.map((k) => (typeof k === "function" ? { read: k, dir: 1 } : { read: (item) => get(item, k.replace(/^-/, "")), dir: k.startsWith("-") ? -1 : 1 }));
   const compare = (a, b) => {
     if (a === b) return 0;
-    if (a === undefined || a === null) return 1;
-    if (b === undefined || b === null) return -1;
+    if (isMissing(a)) return isMissing(b) ? 0 : 1;
+    if (isMissing(b)) return -1;
     if (typeof a === "string" && typeof b === "string") return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
     return a < b ? -1 : a > b ? 1 : 0;
   };
@@ -224,8 +241,7 @@ export function sortBy(items, ...keys) {
       for (const { read, dir } of specs) {
         const a = read(x.item);
         const b = read(y.item);
-        const missing = (v) => v === undefined || v === null;
-        const c = missing(a) || missing(b) ? compare(a, b) : compare(a, b) * dir;
+        const c = isMissing(a) || isMissing(b) ? compare(a, b) : compare(a, b) * dir;
         if (c !== 0) return c;
       }
       return x.index - y.index;
@@ -240,7 +256,7 @@ export function flatten(object, prefix = "") {
     const path = prefix ? `${prefix}.${key}` : key;
     if (isPlainObject(value) && Object.keys(value).length > 0) Object.assign(out, flatten(value, path));
     else if (Array.isArray(value) && value.length > 0) Object.assign(out, flatten(Object.fromEntries(value.map((v, i) => [i, v])), path));
-    else out[path] = value;
+    else Object.defineProperty(out, path, { value, enumerable: true, writable: true, configurable: true }); // not `out[path] =`: a "__proto__" key would change the prototype
   }
   return out;
 }

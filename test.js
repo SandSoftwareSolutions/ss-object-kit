@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 
 import { deepFreeze, flatten, get, groupBy, has, indexBy, isPlainObject, mapValues, merge, omit, pick, set, setIn, sortBy, toPath, uniqueBy, unflatten, unset, unsetIn, withOptions } from "./src/index.js";
@@ -140,4 +141,54 @@ test("flatten and unflatten", () => {
   assert.deepEqual(flat, { "a.b": 1, "a.c.0": 10, "a.c.1.d": 2, e: "x", f: {}, g: [] });
   assert.deepEqual(unflatten({ "a.b": 1, "a.c.0": 10, "a.c.1.d": 2, e: "x" }), { a: { b: 1, c: [10, { d: 2 }] }, e: "x" });
   assert.throws(() => unflatten({ "__proto__.x": 1 }), RangeError);
+});
+
+test("a name straight after a bracket needs a dot: 'a[0]b' is not a path", () => {
+  assert.throws(() => toPath("a[0]b"), TypeError);
+  assert.throws(() => get({ a: [{ b: 1 }] }, "a[0]b"), TypeError);
+  assert.deepEqual(toPath("a[0][1].b"), ["a", "0", "1", "b"]);
+  assert.deepEqual(toPath("a[0].b"), ["a", "0", "b"]);
+});
+
+test("flatten keeps an own '__proto__' key as data and does not change the prototype", () => {
+  const flat = flatten(JSON.parse('{"__proto__":{}, "x":{"__proto__":[]}}'));
+  assert.equal(Object.getPrototypeOf(flat), Object.prototype);
+  assert.deepEqual(Object.getOwnPropertyNames(flat).sort(), ["__proto__", "x.__proto__"]);
+});
+
+test("deepFreeze neither throws on Buffers/typed arrays nor calls getters", () => {
+  let calls = 0;
+  const o = { buf: Buffer.from("ab"), bytes: new Uint8Array(2), empty: new Uint8Array(0), nested: { a: [1] }, get g() { calls++; return { x: 1 }; } };
+  deepFreeze(o);
+  assert.equal(calls, 0);
+  assert.ok(Object.isFrozen(o) && Object.isFrozen(o.nested) && Object.isFrozen(o.nested.a));
+});
+
+test("sortBy puts NaN last like a missing value (it used to break the order)", () => {
+  const rows = [3, NaN, 1, NaN, 2, 0].map((a) => ({ a }));
+  assert.deepEqual(sortBy(rows, "a").map((r) => r.a), [0, 1, 2, 3, NaN, NaN]);
+  assert.deepEqual(sortBy(rows, "-a").map((r) => r.a), [3, 2, 1, 0, NaN, NaN]);
+});
+
+test("merge with arrays: unique is linear and ignores key order of objects", () => {
+  const big = Array.from({ length: 6000 }, (_, i) => ({ id: i % 3000, tag: "x".repeat(40) }));
+  const start = Date.now();
+  const merged = merge({ l: [] }, { l: big }, withOptions({ arrays: "unique" }));
+  assert.equal(merged.l.length, 3000);
+  assert.ok(Date.now() - start < 500, `took ${Date.now() - start} ms`);
+  assert.deepEqual(merge({ l: [{ a: 1, b: 2 }, 1, "1"] }, { l: [{ b: 2, a: 1 }, 1, "1", null] }, withOptions({ arrays: "unique" })).l, [{ a: 1, b: 2 }, 1, "1", null]);
+});
+
+test("random paths: set then get returns the value, __proto__/constructor never touch Object.prototype", () => {
+  const names = ["a", "b", "0", "1", "x y", "__proto__", "constructor", "prototype", "toString"];
+  for (let i = 0; i < 500; i++) {
+    const bytes = randomBytes(4);
+    const path = Array.from(bytes, (b) => names[b % names.length]);
+    const target = {};
+    const blocked = path.some((p) => ["__proto__", "constructor", "prototype"].includes(p));
+    if (blocked) assert.throws(() => set(target, path, 1), RangeError);
+    else assert.equal(get(set(target, path, 7), path), 7);
+    assert.equal(({}).a, undefined);
+    assert.equal(Object.keys(Object.prototype).length, 0);
+  }
 });
