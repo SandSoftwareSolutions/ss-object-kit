@@ -10,6 +10,8 @@ The object and list helpers you keep rewriting: read and write by path (`"a.b[0]
 npm install @sandsoftwaresolutions/object-kit
 ```
 
+Works with `import` and `require()`, and ships TypeScript types for both.
+
 ## Usage
 
 ```js
